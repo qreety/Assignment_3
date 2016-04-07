@@ -536,7 +536,7 @@ void CreateGeometry(){
 	glBindBuffer(GL_ARRAY_BUFFER, VBOID);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(TVertex_VC), BUFFER_OFFSET(0));
 	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(TVertex_VC), BUFFER_OFFSET(sizeof(float)* 3));
-	glVertexAttribIPointer(2, 1, GL_UNSIGNED_INT, sizeof(TVertex_VC), BUFFER_OFFSET(sizeof(float)* 6));
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(TVertex_VC), BUFFER_OFFSET(sizeof(float)* 6));
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
