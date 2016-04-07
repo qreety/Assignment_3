@@ -32,6 +32,12 @@
     <None Include="Shader2.frag">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="TextShader.vert">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="TextShader.frag">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bitmap_image.hpp">

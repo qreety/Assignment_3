@@ -56,11 +56,13 @@ triangle *Tris;
 material *Mate;
 light dLight;
 TwBar *bar;
+GLuint TextureID;
 
 GLushort	*pindex_triangle;
 std::vector<TVertex_VC>	pvertex_triangle;
 GLuint VAOID, IBOID, VBOID;
 GLuint sShader, fShader, VertShader, FragShader, fVertShader, fFragShader;
+GLuint texture, bump1, bump2;
 enum Orientation { CCW, CW} ;
 Orientation ori = CCW;
 enum Display { Wire, Solid };
@@ -86,7 +88,6 @@ std::string loadFile(const char *fname)
 	return fileData.str();
 }
 
-
 // printShaderInfoLog
 // From OpenGL Shading Language 3rd Edition, p215-216
 // Display (hopefully) useful error messages if shader fails to compile
@@ -106,6 +107,86 @@ void printShaderInfoLog(GLint shader)
 		cout << "InfoLog : " << endl << infoLog << endl;
 		delete[] infoLog;
 	}
+}
+
+GLuint loadBMP(const char * imagepath){
+
+	printf("Reading image %s\n", imagepath);
+
+	// Data read from the header of the BMP file
+	unsigned char header[54];
+	unsigned int dataPos;
+	unsigned int imageSize;
+	unsigned int width, height;
+	// Actual RGB data
+	unsigned char * data;
+
+	// Open the file
+	FILE * file = fopen(imagepath, "rb");
+	if (!file)							    { printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar(); return 0; }
+
+	// Read the header, i.e. the 54 first bytes
+
+	// If less than 54 bytes are read, problem
+	if (fread(header, 1, 54, file) != 54){
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	// A BMP files always begins with "BM"
+	if (header[0] != 'B' || header[1] != 'M'){
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	// Make sure this is a 24bpp file
+	if (*(int*)&(header[0x1E]) != 0)         { printf("Not a correct BMP file\n");    return 0; }
+	if (*(int*)&(header[0x1C]) != 24)         { printf("Not a correct BMP file\n");    return 0; }
+
+	// Read the information about the image
+	dataPos = *(int*)&(header[0x0A]);
+	imageSize = *(int*)&(header[0x22]);
+	width = *(int*)&(header[0x12]);
+	height = *(int*)&(header[0x16]);
+
+	// Some BMP files are misformatted, guess missing information
+	if (imageSize == 0)    imageSize = width*height * 3; // 3 : one byte for each Red, Green and Blue component
+	if (dataPos == 0)      dataPos = 54; // The BMP header is done that way
+
+	// Create a buffer
+	data = new unsigned char[imageSize];
+
+	// Read the actual data from the file into the buffer
+	fread(data, 1, imageSize, file);
+
+	// Everything is in memory now, the file wan be closed
+	fclose(file);
+
+	// Create one OpenGL texture
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+
+	// "Bind" the newly created texture : all future texture functions will modify this texture
+	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
+
+	// OpenGL has now copied the data. Free our own version
+	delete[] data;
+
+	// Poor filtering, or ...
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
+
+	// ... nice trilinear filtering.
+	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glPixelStoref(GL_UNPACK_ALIGNMENT, 1);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	// Return the ID of the texture we just created
+	return textureID;
 }
 
 void InitGLStates()
@@ -281,8 +362,6 @@ bool readin(char *FileName) {
 		pvertex_triangle.push_back(Tris[i].v0);
 		pvertex_triangle.push_back(Tris[i].v1);
 		pvertex_triangle.push_back(Tris[i].v2);
-
-		printf("%f\n", Tris[i].v0.u);
 	}
 
 	fclose(fp);
@@ -417,26 +496,6 @@ void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat
 	glUniform3f(glGetUniformLocation(programID, "dLight.diffuse"), dLight.diffuse.r, dLight.diffuse.g, dLight.diffuse.b);
 	glUniform3f(glGetUniformLocation(programID, "dLight.specular"), dLight.specular.r, dLight.specular.g, dLight.specular.b);
 	glUniform1i(glGetUniformLocation(programID, "dLight.on"), dLight.on);
-
-}
-
-void SetLights(glm::vec3 camPos, glm::vec3 objPos){
-	GLfloat length;
-		length = 2;
-	glm::vec3 direction = objPos - dLight.direction;
-	glm::vec3 dir = glm::normalize(direction);
-	
-	
-		// GLUT_ELAPSED_TIME is in milliseconds
-		const int curMs = glutGet(GLUT_ELAPSED_TIME);
-
-		// dt is in seconds
-		const double dt = (curMs - prvMs) / 1000.0;
-		prvMs = curMs;
-
-		// update world state
-		float speed = 1.0f;
-		float degree = speed * dt;
 }
 
 void CreateGeometry(){
@@ -466,6 +525,7 @@ void CreateGeometry(){
 
 	//Just testing
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	error = glGetError();
 
 	//Second VAO setup *******************
 	//This is for the triangle
@@ -480,7 +540,10 @@ void CreateGeometry(){
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
-	
+
+	//Bind the IBO for the VAO
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBOID);
+
 	//Just testing
 	glBindVertexArray(0);
 	glDisableVertexAttribArray(0);
@@ -527,13 +590,17 @@ void display()
 		Shader = sShader;
 	glUseProgram(Shader);
 	//Setup all uniforms for your shader
-	if (dLight.on)
-		SetLights(camPos, objPos);
 	SetUniform(Shader, camPos, glm::mat4(1.0f), V, MVP, dLight);
 	//Bind the VAO
 	glBindVertexArray(VAOID);
 	//At this point, we would bind textures but we aren't using textures in this example
-
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, texture);
+	glUniform1f(glGetUniformLocation(Shader, "text"), 0);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, bump1);
+	glUniform1f(glGetUniformLocation(Shader, "bump"), 1);
+	
 	//Draw command
 	//The first to last vertex is 0 to 3
 	//6 indices will be used to render the 2 triangles. This make our quad.
@@ -576,12 +643,7 @@ void ExitFunction(int value)
 	glDeleteShader(VertShader);
 	glDeleteShader(FragShader);
 	glDeleteProgram(sShader);
-
-	glDetachShader(fShader, fVertShader);
-	glDetachShader(fShader, fFragShader);
-	glDeleteShader(fVertShader);
-	glDeleteShader(fFragShader);
-	glDeleteProgram(fShader);
+	glDeleteTextures(1, &TextureID);
 }
 
 int main(int argc, char* argv[])
@@ -612,8 +674,10 @@ int main(int argc, char* argv[])
 	InitGLStates();
 	InitializeUI();
 
-	LoadShader("Shader1.vert", "Shader1.frag", false, false, true, sShader, VertShader, FragShader);
+	LoadShader("TextShader.vert", "TextShader.frag", false, false, true, sShader, VertShader, FragShader);
 	readin("cube_texture.in");
+	bump1 = loadBMP("orange2.bmp");
+	texture = loadBMP("texture_wall.bmp");
 	
 	glutDisplayFunc(display);
 	glutIdleFunc(display);

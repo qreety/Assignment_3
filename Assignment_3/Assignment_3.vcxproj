@@ -60,6 +60,9 @@
       <AdditionalDependencies>opengl32.lib;freeglut.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
       <SubSystem>Console</SubSystem>
     </Link>
+    <ProjectReference>
+      <UseLibraryDependencyInputs>true</UseLibraryDependencyInputs>
+    </ProjectReference>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <ClCompile>
@@ -93,6 +96,8 @@
     <None Include="Shader1.vert" />
     <None Include="Shader2.frag" />
     <None Include="Shader2.vert" />
+    <None Include="TextShader.frag" />
+    <None Include="TextShader.vert" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="bitmap_image.hpp" />
