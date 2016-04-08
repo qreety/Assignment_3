@@ -67,6 +67,7 @@ enum Orientation { CCW, CW} ;
 Orientation ori = CCW;
 enum Display { Wire, Solid };
 Display dis = Solid;
+glm::mat2 b, bb;
 
 void TW_CALL Reset(void *clientDate);
 // loadFile - loads text file into char* fname
@@ -177,7 +178,94 @@ GLuint loadBMP(const char * imagepath){
 	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
 
 	// ... nice trilinear filtering.
-	glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+	glPixelStoref(GL_UNPACK_ALIGNMENT, 1);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+	glGenerateMipmap(GL_TEXTURE_2D);
+
+	// Return the ID of the texture we just created
+	return textureID;
+}
+
+glm::vec3 GetNorm(GLuint g, GLuint a, GLuint r){
+	glm::vec3 h = glm::vec3(1, 0, r - g);
+	glm::vec3 v = glm::vec3(0, 1, a - g);
+	return cross(h, v);
+}
+
+GLuint loadBump(const char * imagepath){
+
+	printf("Reading image %s\n", imagepath);
+
+	// Data read from the header of the BMP file
+	unsigned char header[54];
+	unsigned int dataPos;
+	unsigned int imageSize;
+	unsigned int width, height;
+	// Actual RGB data
+	unsigned char * data;
+	glm::vec3 * normal;
+
+	// Open the file
+	FILE * file = fopen(imagepath, "rb");
+	if (!file)							    { printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar(); return 0; }
+
+	// Read the header, i.e. the 54 first bytes
+
+	// If less than 54 bytes are read, problem
+	if (fread(header, 1, 54, file) != 54){
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	// A BMP files always begins with "BM"
+	if (header[0] != 'B' || header[1] != 'M'){
+		printf("Not a correct BMP file\n");
+		return 0;
+	}
+	// Make sure this is a 24bpp file
+	if (*(int*)&(header[0x1E]) != 0)         { printf("Not a correct BMP file\n");    return 0; }
+	if (*(int*)&(header[0x1C]) != 24)         { printf("Not a correct BMP file\n");    return 0; }
+
+	// Read the information about the image
+	dataPos = *(int*)&(header[0x0A]);
+	imageSize = *(int*)&(header[0x22]);
+	width = *(int*)&(header[0x12]);
+	height = *(int*)&(header[0x16]);
+
+	// Some BMP files are misformatted, guess missing information
+	if (imageSize == 0)    imageSize = width*height * 3; // 3 : one byte for each Red, Green and Blue component
+	if (dataPos == 0)      dataPos = 54; // The BMP header is done that way
+
+	// Create a buffer
+	data = new unsigned char[imageSize];
+	normal = new glm::vec3[imageSize];
+
+	// Read the actual data from the file into the buffer
+	fread(data, 1, imageSize, file);
+
+	// Everything is in memory now, the file wan be closed
+	fclose(file);
+	
+	// Create one OpenGL texture
+	GLuint textureID;
+	glGenTextures(1, &textureID);
+
+	// "Bind" the newly created texture : all future texture functions will modify this texture
+	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, normal);
+
+	// OpenGL has now copied the data. Free our own version
+	delete[] data;
+	delete[] normal;
+
+	// Poor filtering, or ...
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
+
+	// ... nice trilinear filtering.
 	glPixelStoref(GL_UNPACK_ALIGNMENT, 1);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
@@ -491,11 +579,17 @@ void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat
 	glUniform3f(glGetUniformLocation(programID, "camPos"), camPos.x, camPos.y, camPos.z);
 
 	//Light
-	glUniform3f(glGetUniformLocation(programID, "dLight.direction"), dLight.direction.x, dLight.direction.y, dLight.direction.z);
-	glUniform3f(glGetUniformLocation(programID, "dLight.ambient"), dLight.ambient.r, dLight.ambient.g, dLight.ambient.b);
-	glUniform3f(glGetUniformLocation(programID, "dLight.diffuse"), dLight.diffuse.r, dLight.diffuse.g, dLight.diffuse.b);
-	glUniform3f(glGetUniformLocation(programID, "dLight.specular"), dLight.specular.r, dLight.specular.g, dLight.specular.b);
-	glUniform1i(glGetUniformLocation(programID, "dLight.on"), dLight.on);
+	glUniform3f(glGetUniformLocation(programID, "light.direction"), dLight.direction.x, dLight.direction.y, dLight.direction.z);
+	glUniform3f(glGetUniformLocation(programID, "light.ambient"), dLight.ambient.r, dLight.ambient.g, dLight.ambient.b);
+	glUniform3f(glGetUniformLocation(programID, "light.diffuse"), dLight.diffuse.r, dLight.diffuse.g, dLight.diffuse.b);
+	glUniform3f(glGetUniformLocation(programID, "light.specular"), dLight.specular.r, dLight.specular.g, dLight.specular.b);
+	glUniform1i(glGetUniformLocation(programID, "light.on"), dLight.on);
+
+	//Material
+	glUniform3f(glGetUniformLocation(programID, "mat.ambient"), Mate[0].ambient.r, Mate[0].ambient.g, Mate[0].ambient.b);
+	glUniform3f(glGetUniformLocation(programID, "mat.diffuse"), Mate[0].diffuse.r, Mate[0].diffuse.g, Mate[0].diffuse.b);
+	glUniform3f(glGetUniformLocation(programID, "mat.specular"), Mate[0].specular.r, Mate[0].specular.g, Mate[0].specular.b);
+	glUniform1f(glGetUniformLocation(programID, "mat.shine"), Mate[0].shine);
 }
 
 void CreateGeometry(){
@@ -595,11 +689,19 @@ void display()
 	glBindVertexArray(VAOID);
 	//At this point, we would bind textures but we aren't using textures in this example
 	glActiveTexture(GL_TEXTURE0);
+	glEnable(GL_TEXTURE_2D);
+	glUniform1i(glGetUniformLocation(Shader, "text"), 0);
 	glBindTexture(GL_TEXTURE_2D, texture);
-	glUniform1f(glGetUniformLocation(Shader, "text"), 0);
+
 	glActiveTexture(GL_TEXTURE1);
+	glEnable(GL_TEXTURE_2D);
+	glUniform1i(glGetUniformLocation(Shader, "bump1"), 1);
 	glBindTexture(GL_TEXTURE_2D, bump1);
-	glUniform1f(glGetUniformLocation(Shader, "bump"), 1);
+
+	glActiveTexture(GL_TEXTURE2);
+	glEnable(GL_TEXTURE_2D);
+	glUniform1i(glGetUniformLocation(Shader, "bump2"), 2);
+	glBindTexture(GL_TEXTURE_2D, bump2);
 	
 	//Draw command
 	//The first to last vertex is 0 to 3
@@ -676,8 +778,9 @@ int main(int argc, char* argv[])
 
 	LoadShader("TextShader.vert", "TextShader.frag", false, false, true, sShader, VertShader, FragShader);
 	readin("cube_texture.in");
-	bump1 = loadBMP("orange2.bmp");
 	texture = loadBMP("texture_wall.bmp");
+	bump1 = loadBMP("orange2.bmp");
+	bump2 = loadBMP("bump_circle.bmp");
 	
 	glutDisplayFunc(display);
 	glutIdleFunc(display);
