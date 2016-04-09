@@ -14,6 +14,11 @@ struct Light {
 	bool on;
 };
 
+struct Texture {
+	sampler2D text;
+	bool on;
+};
+
 // Interpolated values from the vertex shaders
 in vec2 UV;
 in vec3 vPos;

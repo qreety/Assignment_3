@@ -12,7 +12,6 @@
 #include <gtx/rotate_vector.hpp>
 #include <AntTweakBar.h>
 #include <cstdio>
-#include "bitmap_image.hpp"
 
 using namespace std;
 
@@ -58,10 +57,19 @@ light dLight;
 TwBar *bar;
 GLuint TextureID;
 
-GLushort	*pindex_triangle;
+std::vector<unsigned short>	pindex_triangle;
 std::vector<TVertex_VC>	pvertex_triangle;
+std::vector<glm::vec3> tangents;
+std::vector<glm::vec3> bitangents;
+
+std::vector<glm::vec3> indexed_vertices;
+std::vector<glm::vec2> indexed_uvs;
+std::vector<glm::vec3> indexed_normals;
+std::vector<glm::vec3> indexed_tangents;
+std::vector<glm::vec3> indexed_bitangents;
+
 GLuint VAOID, IBOID, VBOID;
-GLuint sShader, fShader, VertShader, FragShader, fVertShader, fFragShader;
+GLuint sShader, nShader, VertShader, FragShader, nVertShader, nFragShader;
 GLuint texture, bump1, bump2;
 enum Orientation { CCW, CW} ;
 Orientation ori = CCW;
@@ -110,7 +118,7 @@ void printShaderInfoLog(GLint shader)
 	}
 }
 
-GLuint loadBMP(const char * imagepath){
+GLuint loadBMP(const char * imagepath, int mode){
 
 	printf("Reading image %s\n", imagepath);
 
@@ -149,7 +157,8 @@ GLuint loadBMP(const char * imagepath){
 	height = *(int*)&(header[0x16]);
 
 	// Some BMP files are misformatted, guess missing information
-	if (imageSize == 0)    imageSize = width*height * 3; // 3 : one byte for each Red, Green and Blue component
+	if (imageSize == 0 && mode == 0)    imageSize = width*height * 3; // 3 : one byte for each Red, Green and Blue component
+	if (imageSize == 0 && mode == 1)	imageSize = width*height;
 	if (dataPos == 0)      dataPos = 54; // The BMP header is done that way
 
 	// Create a buffer
@@ -167,6 +176,12 @@ GLuint loadBMP(const char * imagepath){
 
 	// "Bind" the newly created texture : all future texture functions will modify this texture
 	glBindTexture(GL_TEXTURE_2D, textureID);
+
+	//glPixelStoref(GL_UNPACK_ALIGNMENT, 1);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, data);
 
@@ -178,99 +193,7 @@ GLuint loadBMP(const char * imagepath){
 	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
 
 	// ... nice trilinear filtering.
-	glPixelStoref(GL_UNPACK_ALIGNMENT, 1);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
-	glGenerateMipmap(GL_TEXTURE_2D);
-
-	// Return the ID of the texture we just created
-	return textureID;
-}
-
-glm::vec3 GetNorm(GLuint g, GLuint a, GLuint r){
-	glm::vec3 h = glm::vec3(1, 0, r - g);
-	glm::vec3 v = glm::vec3(0, 1, a - g);
-	return cross(h, v);
-}
-
-GLuint loadBump(const char * imagepath){
-
-	printf("Reading image %s\n", imagepath);
-
-	// Data read from the header of the BMP file
-	unsigned char header[54];
-	unsigned int dataPos;
-	unsigned int imageSize;
-	unsigned int width, height;
-	// Actual RGB data
-	unsigned char * data;
-	glm::vec3 * normal;
-
-	// Open the file
-	FILE * file = fopen(imagepath, "rb");
-	if (!file)							    { printf("%s could not be opened. Are you in the right directory ? Don't forget to read the FAQ !\n", imagepath); getchar(); return 0; }
-
-	// Read the header, i.e. the 54 first bytes
-
-	// If less than 54 bytes are read, problem
-	if (fread(header, 1, 54, file) != 54){
-		printf("Not a correct BMP file\n");
-		return 0;
-	}
-	// A BMP files always begins with "BM"
-	if (header[0] != 'B' || header[1] != 'M'){
-		printf("Not a correct BMP file\n");
-		return 0;
-	}
-	// Make sure this is a 24bpp file
-	if (*(int*)&(header[0x1E]) != 0)         { printf("Not a correct BMP file\n");    return 0; }
-	if (*(int*)&(header[0x1C]) != 24)         { printf("Not a correct BMP file\n");    return 0; }
-
-	// Read the information about the image
-	dataPos = *(int*)&(header[0x0A]);
-	imageSize = *(int*)&(header[0x22]);
-	width = *(int*)&(header[0x12]);
-	height = *(int*)&(header[0x16]);
-
-	// Some BMP files are misformatted, guess missing information
-	if (imageSize == 0)    imageSize = width*height * 3; // 3 : one byte for each Red, Green and Blue component
-	if (dataPos == 0)      dataPos = 54; // The BMP header is done that way
-
-	// Create a buffer
-	data = new unsigned char[imageSize];
-	normal = new glm::vec3[imageSize];
-
-	// Read the actual data from the file into the buffer
-	fread(data, 1, imageSize, file);
-
-	// Everything is in memory now, the file wan be closed
-	fclose(file);
 	
-	// Create one OpenGL texture
-	GLuint textureID;
-	glGenTextures(1, &textureID);
-
-	// "Bind" the newly created texture : all future texture functions will modify this texture
-	glBindTexture(GL_TEXTURE_2D, textureID);
-
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_BGR, GL_UNSIGNED_BYTE, normal);
-
-	// OpenGL has now copied the data. Free our own version
-	delete[] data;
-	delete[] normal;
-
-	// Poor filtering, or ...
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-	//glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); 
-
-	// ... nice trilinear filtering.
-	glPixelStoref(GL_UNPACK_ALIGNMENT, 1);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
 	glGenerateMipmap(GL_TEXTURE_2D);
 
 	// Return the ID of the texture we just created
@@ -393,7 +316,6 @@ bool readin(char *FileName) {
 	fscanf(fp, "Material count = %d\n", &material_count);
 
 	NumV = NumTris * 3;
-	pindex_triangle = new GLushort[NumV];
 	Mate = new material[material_count];
 	for (int i = 0; i < material_count; i++){
 		fscanf(fp, "ambient color %f %f %f\n", &(Mate[i].ambient.x), &(Mate[i].ambient.y), &(Mate[i].ambient.z));
@@ -569,6 +491,146 @@ int LoadShader(const char *pfilePath_vs, const char *pfilePath_fs, bool bindTexC
 	return 1;		//Success
 }
 
+bool is_near(float v1, float v2){
+	return fabs(v1 - v2) < 0.01f;
+}
+
+bool getSimilarVertexIndex(
+	glm::vec3 & in_vertex,
+	glm::vec2 & in_uv,
+	glm::vec3 & in_normal,
+	std::vector<glm::vec3> & out_vertices,
+	std::vector<glm::vec2> & out_uvs,
+	std::vector<glm::vec3> & out_normals,
+	unsigned short & result
+	){
+	// Lame linear search
+	for (unsigned int i = 0; i<out_vertices.size(); i++){
+		if (
+			is_near(in_vertex.x, out_vertices[i].x) &&
+			is_near(in_vertex.y, out_vertices[i].y) &&
+			is_near(in_vertex.z, out_vertices[i].z) &&
+			is_near(in_uv.x, out_uvs[i].x) &&
+			is_near(in_uv.y, out_uvs[i].y) &&
+			is_near(in_normal.x, out_normals[i].x) &&
+			is_near(in_normal.y, out_normals[i].y) &&
+			is_near(in_normal.z, out_normals[i].z)
+			){
+			result = i;
+			return true;
+		}
+	}
+	// No other vertex could be used instead.
+	// Looks like we'll have to add it to the VBO.
+	return false;
+}
+
+void indexVBO_TBN(
+	std::vector<TVertex_VC> & triangles,
+	std::vector<glm::vec3> & in_tangents,
+	std::vector<glm::vec3> & in_bitangents,
+
+	std::vector<unsigned short> & out_indices,
+	std::vector<glm::vec3> & out_vertices,
+	std::vector<glm::vec2> & out_uvs,
+	std::vector<glm::vec3> & out_normals,
+	std::vector<glm::vec3> & out_tangents,
+	std::vector<glm::vec3> & out_bitangents
+	){
+	// For each input vertex
+	for (unsigned int i = 0; i<triangles.size(); i++){
+
+		// Try to find a similar vertex in out_XXXX
+		unsigned short index;
+		glm::vec3 vert = glm::vec3(triangles[i].x, triangles[i].y, triangles[i].z);
+		glm::vec2 uv = glm::vec2(triangles[i].u, triangles[i].v);
+		glm::vec3 norm = glm::vec3(triangles[i].nx, triangles[i].ny, triangles[i].nz);
+
+		bool found = getSimilarVertexIndex(vert, uv, norm, out_vertices, out_uvs, out_normals, index);
+
+		if (found){ // A similar vertex is already in the VBO, use it instead !
+			out_indices.push_back(index);
+
+			// Average the tangents and the bitangents
+			out_tangents[index] += in_tangents[i];
+			out_bitangents[index] += in_bitangents[i];
+		}
+		else{ // If not, it needs to be added in the output data.
+			out_vertices.push_back(vert);
+			out_uvs.push_back(uv);
+			out_normals.push_back(norm);
+			out_tangents.push_back(in_tangents[i]);
+			out_bitangents.push_back(in_bitangents[i]);
+			out_indices.push_back((unsigned short)out_vertices.size() - 1);
+		}
+	}
+}
+
+void computeTangentBasis(
+	// inputs
+	std::vector<TVertex_VC> & triangles,
+	// outputs
+	std::vector<glm::vec3> & tangents,
+	std::vector<glm::vec3> & bitangents
+	){
+
+	for (unsigned int i = 0; i<triangles.size(); i += 3){
+
+		// Shortcuts for vertices
+		glm::vec3 & v0 = glm::vec3(triangles[i + 0].x, triangles[i + 0].y, triangles[i + 0].z);
+		glm::vec3 & v1 = glm::vec3(triangles[i + 1].x, triangles[i + 1].y, triangles[i + 1].z);
+		glm::vec3 & v2 = glm::vec3(triangles[i + 2].x, triangles[i + 2].y, triangles[i + 2].z);
+
+		// Shortcuts for UVs
+		glm::vec2 & uv0 = glm::vec2(triangles[i + 0].u, triangles[i + 0].v);
+		glm::vec2 & uv1 = glm::vec2(triangles[i + 1].u, triangles[i + 1].v);
+		glm::vec2 & uv2 = glm::vec2(triangles[i + 2].u, triangles[i + 2].v);
+
+		// Edges of the triangle : postion delta
+		glm::vec3 deltaPos1 = v1 - v0;
+		glm::vec3 deltaPos2 = v2 - v0;
+
+		// UV delta
+		glm::vec2 deltaUV1 = uv1 - uv0;
+		glm::vec2 deltaUV2 = uv2 - uv0;
+
+		float r = 1.0f / (deltaUV1.x * deltaUV2.y - deltaUV1.y * deltaUV2.x);
+		glm::vec3 tangent = (deltaPos1 * deltaUV2.y - deltaPos2 * deltaUV1.y)*r;
+		glm::vec3 bitangent = (deltaPos2 * deltaUV1.x - deltaPos1 * deltaUV2.x)*r;
+
+		// Set the same tangent for all three vertices of the triangle.
+		// They will be merged later, in vboindexer.cpp
+		tangents.push_back(tangent);
+		tangents.push_back(tangent);
+		tangents.push_back(tangent);
+
+		// Same thing for binormals
+		bitangents.push_back(bitangent);
+		bitangents.push_back(bitangent);
+		bitangents.push_back(bitangent);
+
+	}
+
+	// See "Going Further"
+	for (unsigned int i = 0; i<triangles.size(); i += 1)
+	{
+		glm::vec3 & n = glm::vec3(triangles[i].nx, triangles[i].ny, triangles[i].nz);
+		glm::vec3 & t = tangents[i];
+		glm::vec3 & b = bitangents[i];
+
+		// Gram-Schmidt orthogonalize
+		t = glm::normalize(t - n * glm::dot(n, t));
+
+		// Calculate handedness
+		if (glm::dot(glm::cross(n, t), b) < 0.0f){
+			t = t * -1.0f;
+		}
+
+	}
+
+
+}
+
 void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat4 ViewMatrix, glm::mat4	MVPMatrix, light dLight){
 	//MVP
 	glUniformMatrix4fv(glGetUniformLocation(programID, "MVP"), 1, FALSE, &MVPMatrix[0][0]);
@@ -590,20 +652,32 @@ void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat
 	glUniform3f(glGetUniformLocation(programID, "mat.diffuse"), Mate[0].diffuse.r, Mate[0].diffuse.g, Mate[0].diffuse.b);
 	glUniform3f(glGetUniformLocation(programID, "mat.specular"), Mate[0].specular.r, Mate[0].specular.g, Mate[0].specular.b);
 	glUniform1f(glGetUniformLocation(programID, "mat.shine"), Mate[0].shine);
+
+	glEnable(GL_TEXTURE_2D);
+	glUniform1i(glGetUniformLocation(programID, "text"), 1);
+	glUniform1i(glGetUniformLocation(programID, "bump1"), 2);
+	glUniform1i(glGetUniformLocation(programID, "bump2"), 3);
 }
 
 void CreateGeometry(){
 
 	for (int i = 0; i < NumV; i++){
-		pindex_triangle[i] = i;
+		pindex_triangle.push_back(i);
 	}
+
+	computeTangentBasis(pvertex_triangle, tangents, bitangents);
+
+	indexVBO_TBN(
+		pvertex_triangle, tangents, bitangents,
+		pindex_triangle, indexed_vertices, indexed_uvs, indexed_normals, indexed_tangents, indexed_bitangents
+		);
 
 	//Create the IBO for the triangle
 	//16 bit indices
 	//We could have actually made one big IBO for both the quad and triangle.
 	glGenBuffers(1, &IBOID);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBOID);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, NumV * sizeof(GLushort), pindex_triangle, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, NumV * sizeof(GLushort), &pindex_triangle[0], GL_STATIC_DRAW);
 
 	GLenum error = glGetError();
 
@@ -613,9 +687,18 @@ void CreateGeometry(){
 
 	//Create VBO for the triangle
 	glGenBuffers(1, &VBOID);
-
 	glBindBuffer(GL_ARRAY_BUFFER, VBOID);
 	glBufferData(GL_ARRAY_BUFFER, NumV * sizeof(TVertex_VC), &pvertex_triangle[0], GL_STATIC_DRAW);
+
+	GLuint tangentbuffer;
+	glGenBuffers(1, &tangentbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, tangentbuffer);
+	glBufferData(GL_ARRAY_BUFFER, indexed_tangents.size() * sizeof(glm::vec3), &indexed_tangents[0], GL_STATIC_DRAW);
+
+	GLuint bitangentbuffer;
+	glGenBuffers(1, &bitangentbuffer);
+	glBindBuffer(GL_ARRAY_BUFFER, bitangentbuffer);
+	glBufferData(GL_ARRAY_BUFFER, indexed_bitangents.size() * sizeof(glm::vec3), &indexed_bitangents[0], GL_STATIC_DRAW);
 
 	//Just testing
 	glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -634,7 +717,28 @@ void CreateGeometry(){
 	glEnableVertexAttribArray(0);
 	glEnableVertexAttribArray(1);
 	glEnableVertexAttribArray(2);
+	glEnableVertexAttribArray(3);
+	glBindBuffer(GL_ARRAY_BUFFER, tangentbuffer);
+	glVertexAttribPointer(
+		3,                                // attribute
+		3,                                // size
+		GL_FLOAT,                         // type
+		GL_FALSE,                         // normalized?
+		0,                                // stride
+		(void*)0                          // array buffer offset
+		);
 
+	// 5th attribute buffer : bitangents
+	glEnableVertexAttribArray(4);
+	glBindBuffer(GL_ARRAY_BUFFER, bitangentbuffer);
+	glVertexAttribPointer(
+		4,                                // attribute
+		3,                                // size
+		GL_FLOAT,                         // type
+		GL_FALSE,                         // normalized?
+		0,                                // stride
+		(void*)0                          // array buffer offset
+		);
 	//Bind the IBO for the VAO
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, IBOID);
 
@@ -681,6 +785,9 @@ void display()
 
 	//Bind the shader that we want to use
 	GLuint Shader;
+	if (!bumpb && !bumps)
+		Shader = nShader;
+	else
 		Shader = sShader;
 	glUseProgram(Shader);
 	//Setup all uniforms for your shader
@@ -688,20 +795,14 @@ void display()
 	//Bind the VAO
 	glBindVertexArray(VAOID);
 	//At this point, we would bind textures but we aren't using textures in this example
-	glActiveTexture(GL_TEXTURE0);
-	glEnable(GL_TEXTURE_2D);
-	glUniform1i(glGetUniformLocation(Shader, "text"), 0);
-	glBindTexture(GL_TEXTURE_2D, texture);
+	glActiveTexture(GL_TEXTURE3);
+	glBindTexture(GL_TEXTURE_2D, bump2);
 
 	glActiveTexture(GL_TEXTURE1);
-	glEnable(GL_TEXTURE_2D);
-	glUniform1i(glGetUniformLocation(Shader, "bump1"), 1);
-	glBindTexture(GL_TEXTURE_2D, bump1);
+	glBindTexture(GL_TEXTURE_2D, texture);
 
 	glActiveTexture(GL_TEXTURE2);
-	glEnable(GL_TEXTURE_2D);
-	glUniform1i(glGetUniformLocation(Shader, "bump2"), 2);
-	glBindTexture(GL_TEXTURE_2D, bump2);
+	glBindTexture(GL_TEXTURE_2D, bump1);
 	
 	//Draw command
 	//The first to last vertex is 0 to 3
@@ -777,10 +878,11 @@ int main(int argc, char* argv[])
 	InitializeUI();
 
 	LoadShader("TextShader.vert", "TextShader.frag", false, false, true, sShader, VertShader, FragShader);
+	LoadShader("Shader1.vert", "Shader1.frag", false, false, true, nShader, nVertShader, nFragShader);
 	readin("cube_texture.in");
-	texture = loadBMP("texture_wall.bmp");
-	bump1 = loadBMP("orange2.bmp");
-	bump2 = loadBMP("bump_circle.bmp");
+	texture = loadBMP("texture_wall.bmp", 0);
+	bump1 = loadBMP("bump1.bmp", 1);
+	bump2 = loadBMP("bump2.bmp", 1);
 	
 	glutDisplayFunc(display);
 	glutIdleFunc(display);

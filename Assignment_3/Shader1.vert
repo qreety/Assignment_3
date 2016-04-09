@@ -1,22 +1,27 @@
-//[VERTEX SHADER]
-#version 330
+#version 330 core
 
-layout (location = 0) in vec3 InVertex;
-layout (location = 1) in vec3 InNormal;
-layout (location = 2) in int m;
+// Input vertex data, different for all executions of this shader.
+layout(location = 0) in vec3 position;
+layout(location = 1) in vec3 normal;
+layout(location = 2) in vec2 uv;
 
-smooth out vec3 vNormal;
-smooth out vec3 vPos;
-flat out int mindex;
+// Output data ; will be interpolated for each fragment.
+out vec2 UV;
+out vec3 vNormal;
+out vec3 vPos;
 
+// Values that stay constant for the whole mesh.
 uniform mat4 MVP;
-uniform mat4 M;
 uniform mat4 V;
+uniform mat4 M;
 
-void main()
-{
-	gl_Position = MVP * vec4(InVertex, 1.0);
-	vPos = (V * vec4(InVertex, 1)).xyz;
-	vNormal = mat3(transpose(inverse(M))) * InNormal;
-	mindex = m;
+void main(){
+
+	// Output position of the vertex, in clip space : MVP * position
+	gl_Position =  MVP * vec4(position,1);
+	vPos = (V * vec4(position, 1)).xyz;
+	vNormal = mat3(transpose(inverse(M))) * normal;
+	// UV of the vertex. No special space for this one.
+	UV = uv;
 }
+

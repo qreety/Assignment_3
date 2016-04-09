@@ -1,4 +1,4 @@
-#version 330
+#version 330 core
 struct Material{
 	vec3 ambient;
 	vec3 diffuse;
@@ -6,7 +6,7 @@ struct Material{
 	float shine;
 };
 
-struct DirLight {
+struct Light {
     vec3 direction;
     vec3 ambient;
     vec3 diffuse;
@@ -14,87 +14,40 @@ struct DirLight {
 	bool on;
 };
 
-struct PointLight {
-    vec3 position;
-	
-    vec3 ambient;
-    vec3 diffuse;
-    vec3 specular;
-	bool on;
-};
 
-#define MAT_COUNT 6
 
-flat in int mindex;
-smooth in vec3 vPos;
-smooth in vec3 vNormal;
+// Interpolated values from the vertex shaders
+in vec2 UV;
+in vec3 vPos;
+in vec3 vNormal;
 
-out vec4 color;
+// Ouput data
+out vec4 Color;
 
-uniform Material mat[MAT_COUNT];
-uniform vec3 aLight;
-uniform DirLight light;
-uniform PointLight dLight;
+// Values that stay constant for the whole mesh.
+uniform sampler2D text;
+uniform sampler2D bump1;
+uniform sampler2D bump2;
+uniform Material mat;
+uniform Light light;
 uniform vec3 camPos;
 
-vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir);
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
-
-void main()
-{
+void main(){
+	// Ambient
+    vec3 ambient = light.ambient * vec3(texture(text, UV));
+  	
+    // Diffuse 
+    vec3 newnorm;
 	vec3 norm = normalize(vNormal);
+    vec3 lightDir = normalize(light.direction);
+    float diff = max(dot(norm, lightDir), 0.0);
+    vec3 diffuse = light.diffuse * diff * mat.diffuse;  
+    
+    // Specular
     vec3 viewDir = normalize(camPos - vPos);
-	vec3 am = aLight * mat[mindex].ambient;
-	vec3 result = am;
-	
-	if(light.on && dLight.on)
-	{
-	result = am + CalcDirLight(light, norm, viewDir) + CalcPointLight(dLight, norm, vPos, viewDir);
-	}
-	else if(light.on)
-	{
-	result = am + CalcDirLight(light, norm, viewDir);
-	}
-	else if (dLight.on)
-	{
-	result = am + CalcPointLight(dLight, norm, vPos, viewDir);
-	}
-
-	color = vec4(result, 1.0);
-}
-
-vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir)
-{
-    vec3 lightDir = normalize(-light.direction);
-    // Diffuse shading
-    float diff = max(dot(normal, lightDir), 0.0);
-    // Specular shading
-    vec3 halfDir = normalize( lightDir + camPos );  
-    float spec = pow(max(dot( halfDir, normal), 0.0), mat[mindex].shine);
-    // Combine results
-    vec3 ambient = light.ambient * mat[mindex].diffuse;
-    vec3 diffuse = light.diffuse * diff * mat[mindex].diffuse;
-    vec3 specular = light.specular * spec * mat[mindex].specular;
-    return (ambient + diffuse + specular);
-}
-
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
-{
-    vec3 lightDir = normalize(light.position - vPos);
-    // Diffuse shading
-    float diff = max(dot(normal, lightDir), 0.0);
-    // Specular shading
-    vec3 halfDir = normalize( lightDir + camPos );  
-    float spec = pow(max(dot( halfDir, normal), 0.0), mat[mindex].shine);
-    // Attenuation
-    float distance = length(light.position - fragPos);
-    float attenuation = 1.0f;    
-    // Combine results
-    vec3 ambient = light.ambient * mat[mindex].diffuse;
-    vec3 diffuse = light.diffuse * diff * mat[mindex].diffuse;
-    vec3 specular = light.specular * spec * mat[mindex].specular;
-    ambient *= attenuation;
-    diffuse *= attenuation;
-    specular *= attenuation;
-    return (ambient + diffuse + specular);
+    vec3 reflectDir = reflect(-lightDir, norm);  
+    float spec = pow(max(dot(viewDir, reflectDir), 0.0), mat.shine);
+    vec3 specular = light.specular * spec * mat.specular;
+        
+    Color = vec4(vec3(texture(text, UV)) + ambient + diffuse + specular, 1.0f);
 }
