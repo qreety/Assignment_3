@@ -93,6 +93,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="None.frag" />
+    <None Include="NormalMapping.frag" />
+    <None Include="NormalMapping.vert" />
     <None Include="Shader1.frag" />
     <None Include="Shader1.vert" />
     <None Include="Shader2.frag" />

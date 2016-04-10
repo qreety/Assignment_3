@@ -647,7 +647,7 @@ void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat
 	glUniform3f(glGetUniformLocation(programID, "light.diffuse"), dLight.diffuse.r, dLight.diffuse.g, dLight.diffuse.b);
 	glUniform3f(glGetUniformLocation(programID, "light.specular"), dLight.specular.r, dLight.specular.g, dLight.specular.b);
 	glUniform1i(glGetUniformLocation(programID, "light.on"), dLight.on);
-	glUniform3f(glGetUniformLocation(programID, "LightDirection_worldspace"), dLight.direction.x, dLight.direction.y, dLight.direction.z);
+	glUniform3f(glGetUniformLocation(programID, "lightDir"), dLight.direction.x, dLight.direction.y, dLight.direction.z);
 
 	//Material
 	glUniform3f(glGetUniformLocation(programID, "material.ambient"), Mate[0].ambient.r, Mate[0].ambient.g, Mate[0].ambient.b);
@@ -656,9 +656,6 @@ void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat
 	glUniform1f(glGetUniformLocation(programID, "material.shine"), Mate[0].shine);
 
 	glEnable(GL_TEXTURE_2D);
-	glUniform1i(glGetUniformLocation(programID, "wall.text"), 1);
-	glUniform1i(glGetUniformLocation(programID, "bump1.text"), 2);
-	glUniform1i(glGetUniformLocation(programID, "bump2.text"), 3);
 
 	glUniform1i(glGetUniformLocation(programID, "wall.on"), text);
 	glUniform1i(glGetUniformLocation(programID, "bump1.on"), bumpb);
@@ -800,15 +797,21 @@ void display()
 	//Bind the VAO
 	glBindVertexArray(VAOID);
 	//At this point, we would bind textures but we aren't using textures in this example
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_2D, bump2);
-
-	glActiveTexture(GL_TEXTURE1);
+	glActiveTexture(GL_TEXTURE0);
+	int texture_location = glGetUniformLocation(Shader, "wall.texture");
+	glUniform1i(texture_location, 0);
 	glBindTexture(GL_TEXTURE_2D, texture);
 
-	glActiveTexture(GL_TEXTURE2);
+	glActiveTexture(GL_TEXTURE1);
+	texture_location = glGetUniformLocation(Shader, "bump1.texture");
+	glUniform1i(texture_location, 1);
 	glBindTexture(GL_TEXTURE_2D, bump1);
-	
+
+	glActiveTexture(GL_TEXTURE2);
+	texture_location = glGetUniformLocation(Shader, "bump2.texture");
+	glUniform1i(texture_location, 2);
+	glBindTexture(GL_TEXTURE_2D, bump2);
+
 	//Draw command
 	//The first to last vertex is 0 to 3
 	//6 indices will be used to render the 2 triangles. This make our quad.
@@ -820,6 +823,7 @@ void display()
 	glDisableVertexAttribArray(0);
 	glDisableVertexAttribArray(1);
 	glDisableVertexAttribArray(2);
+
 	glutSwapBuffers();
 }
 

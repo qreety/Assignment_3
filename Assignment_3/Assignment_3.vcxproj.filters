@@ -47,5 +47,11 @@
     <None Include="Texture.frag">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="NormalMapping.vert">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="NormalMapping.frag">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>
