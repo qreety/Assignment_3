@@ -34,7 +34,7 @@ uniform vec3 camPos;
 
 void main(){
 	// Ambient
-    vec3 ambient = light.ambient * vec3(texture(text, UV));
+    vec3 ambient = light.ambient * vec3(texture2D(text, UV));
   	
     // Diffuse 
     vec3 newnorm;
@@ -49,5 +49,5 @@ void main(){
     float spec = pow(max(dot(viewDir, reflectDir), 0.0), mat.shine);
     vec3 specular = light.specular * spec * mat.specular;
         
-    Color = vec4(vec3(texture(text, UV)) + ambient + diffuse + specular, 1.0f);
+    Color = vec4(vec3(texture2D(text, UV)) + ambient + diffuse + specular, 1.0f);
 }

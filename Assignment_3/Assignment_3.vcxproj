@@ -92,12 +92,15 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="None.frag" />
     <None Include="Shader1.frag" />
     <None Include="Shader1.vert" />
     <None Include="Shader2.frag" />
     <None Include="Shader2.vert" />
+    <None Include="text.frag" />
     <None Include="TextShader.frag" />
     <None Include="TextShader.vert" />
+    <None Include="Texture.frag" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

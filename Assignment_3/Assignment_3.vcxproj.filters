@@ -38,5 +38,14 @@
     <None Include="TextShader.frag">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="text.frag">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="None.frag">
+      <Filter>Source Files</Filter>
+    </None>
+    <None Include="Texture.frag">
+      <Filter>Source Files</Filter>
+    </None>
   </ItemGroup>
 </Project>

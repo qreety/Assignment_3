@@ -69,7 +69,7 @@ std::vector<glm::vec3> indexed_tangents;
 std::vector<glm::vec3> indexed_bitangents;
 
 GLuint VAOID, IBOID, VBOID;
-GLuint sShader, nShader, VertShader, FragShader, nVertShader, nFragShader;
+GLuint sShader, VertShader, FragShader;
 GLuint texture, bump1, bump2;
 enum Orientation { CCW, CW} ;
 Orientation ori = CCW;
@@ -631,32 +631,38 @@ void computeTangentBasis(
 
 }
 
-void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat4 ViewMatrix, glm::mat4	MVPMatrix, light dLight){
+void SetUniform(int programID, glm::vec3 camPos, glm::mat4 ModelMatrix, glm::mat4 ViewMatrix, glm::mat4	MVPMatrix, light dLight, glm::mat3 mv33){
 	//MVP
 	glUniformMatrix4fv(glGetUniformLocation(programID, "MVP"), 1, FALSE, &MVPMatrix[0][0]);
 	glUniformMatrix4fv(glGetUniformLocation(programID, "M"), 1, FALSE, &ModelMatrix[0][0]);
 	glUniformMatrix4fv(glGetUniformLocation(programID, "V"), 1, FALSE, &ViewMatrix[0][0]);
+	glUniformMatrix3fv(glGetUniformLocation(programID, "MV3x3"), 1, GL_FALSE, &mv33[0][0]);
 
 	//Camera position
 	glUniform3f(glGetUniformLocation(programID, "camPos"), camPos.x, camPos.y, camPos.z);
 
 	//Light
-	glUniform3f(glGetUniformLocation(programID, "light.direction"), dLight.direction.x, dLight.direction.y, dLight.direction.z);
+	glUniform3f(glGetUniformLocation(programID, "light.direction"), -dLight.direction.x, -dLight.direction.y, dLight.direction.z);
 	glUniform3f(glGetUniformLocation(programID, "light.ambient"), dLight.ambient.r, dLight.ambient.g, dLight.ambient.b);
 	glUniform3f(glGetUniformLocation(programID, "light.diffuse"), dLight.diffuse.r, dLight.diffuse.g, dLight.diffuse.b);
 	glUniform3f(glGetUniformLocation(programID, "light.specular"), dLight.specular.r, dLight.specular.g, dLight.specular.b);
 	glUniform1i(glGetUniformLocation(programID, "light.on"), dLight.on);
+	glUniform3f(glGetUniformLocation(programID, "LightDirection_worldspace"), dLight.direction.x, dLight.direction.y, dLight.direction.z);
 
 	//Material
-	glUniform3f(glGetUniformLocation(programID, "mat.ambient"), Mate[0].ambient.r, Mate[0].ambient.g, Mate[0].ambient.b);
-	glUniform3f(glGetUniformLocation(programID, "mat.diffuse"), Mate[0].diffuse.r, Mate[0].diffuse.g, Mate[0].diffuse.b);
-	glUniform3f(glGetUniformLocation(programID, "mat.specular"), Mate[0].specular.r, Mate[0].specular.g, Mate[0].specular.b);
-	glUniform1f(glGetUniformLocation(programID, "mat.shine"), Mate[0].shine);
+	glUniform3f(glGetUniformLocation(programID, "material.ambient"), Mate[0].ambient.r, Mate[0].ambient.g, Mate[0].ambient.b);
+	glUniform3f(glGetUniformLocation(programID, "material.diffuse"), Mate[0].diffuse.r, Mate[0].diffuse.g, Mate[0].diffuse.b);
+	glUniform3f(glGetUniformLocation(programID, "material.specular"), Mate[0].specular.r, Mate[0].specular.g, Mate[0].specular.b);
+	glUniform1f(glGetUniformLocation(programID, "material.shine"), Mate[0].shine);
 
 	glEnable(GL_TEXTURE_2D);
-	glUniform1i(glGetUniformLocation(programID, "text"), 1);
-	glUniform1i(glGetUniformLocation(programID, "bump1"), 2);
-	glUniform1i(glGetUniformLocation(programID, "bump2"), 3);
+	glUniform1i(glGetUniformLocation(programID, "wall.text"), 1);
+	glUniform1i(glGetUniformLocation(programID, "bump1.text"), 2);
+	glUniform1i(glGetUniformLocation(programID, "bump2.text"), 3);
+
+	glUniform1i(glGetUniformLocation(programID, "wall.on"), text);
+	glUniform1i(glGetUniformLocation(programID, "bump1.on"), bumpb);
+	glUniform1i(glGetUniformLocation(programID, "bump2.on"), bumps);
 }
 
 void CreateGeometry(){
@@ -779,19 +785,18 @@ void display()
 
 	glm::mat4 P = glm::perspective(45.0f, 4.0f / 3.0f, 1.0f, 1000.0f);
 	glm::mat4 MVP = P * V;
+	glm::mat3 MV3 = glm::mat3(MVP);
 
 	//Clear all the buffers
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT);
 
 	//Bind the shader that we want to use
 	GLuint Shader;
-	if (!bumpb && !bumps)
-		Shader = nShader;
-	else
+	
 		Shader = sShader;
 	glUseProgram(Shader);
 	//Setup all uniforms for your shader
-	SetUniform(Shader, camPos, glm::mat4(1.0f), V, MVP, dLight);
+	SetUniform(Shader, camPos, glm::mat4(1.0f), V, MVP, dLight, MV3);
 	//Bind the VAO
 	glBindVertexArray(VAOID);
 	//At this point, we would bind textures but we aren't using textures in this example
@@ -877,8 +882,7 @@ int main(int argc, char* argv[])
 	InitGLStates();
 	InitializeUI();
 
-	LoadShader("TextShader.vert", "TextShader.frag", false, false, true, sShader, VertShader, FragShader);
-	LoadShader("Shader1.vert", "Shader1.frag", false, false, true, nShader, nVertShader, nFragShader);
+	LoadShader("TextShader.vert", "Texture.frag", false, false, true, sShader, VertShader, FragShader);
 	readin("cube_texture.in");
 	texture = loadBMP("texture_wall.bmp", 0);
 	bump1 = loadBMP("bump1.bmp", 1);
